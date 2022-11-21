@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 
@@ -1006,6 +1007,27 @@ public sealed partial class SelectExpression
                 }
 
                 return newTpcTable;
+            }
+
+            if (expression is TableValuedFunctionExpression tableValuedFunctionExpression)
+            {
+                var newArguments = new SqlExpression[tableValuedFunctionExpression.Arguments.Count];
+                for (var i = 0; i < newArguments.Length; i++)
+                {
+                    newArguments[i] = (SqlExpression)Visit(tableValuedFunctionExpression.Arguments[i]);
+                }
+
+                var newTableValuedFunctionExpression = new TableValuedFunctionExpression(
+                    tableValuedFunctionExpression.StoreFunction,
+                    newArguments);
+
+                newTableValuedFunctionExpression.Alias = tableValuedFunctionExpression.Alias;
+                foreach (var annotation in tableValuedFunctionExpression.GetAnnotations())
+                {
+                    newTableValuedFunctionExpression.AddAnnotation(annotation.Name, annotation.Value);
+                }
+
+                return newTableValuedFunctionExpression;
             }
 
             return expression is IClonableTableExpressionBase cloneable ? cloneable.Clone() : base.Visit(expression);
