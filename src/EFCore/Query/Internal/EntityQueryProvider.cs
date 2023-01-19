@@ -11,12 +11,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal;
 /// </summary>
 public class EntityQueryProvider : IAsyncQueryProvider
 {
-    private static readonly MethodInfo GenericCreateQueryMethod
-        = typeof(EntityQueryProvider).GetRuntimeMethods()
-            .Single(m => (m.Name == "CreateQuery") && m.IsGenericMethod);
+    private static MethodInfo? _genericCreateQueryMethod;
 
-    private readonly MethodInfo _genericExecuteMethod;
-
+    private MethodInfo? _genericExecuteMethod;
     private readonly IQueryCompiler _queryCompiler;
 
     /// <summary>
@@ -28,10 +25,15 @@ public class EntityQueryProvider : IAsyncQueryProvider
     public EntityQueryProvider(IQueryCompiler queryCompiler)
     {
         _queryCompiler = queryCompiler;
-        _genericExecuteMethod = queryCompiler.GetType()
-            .GetRuntimeMethods()
-            .Single(m => (m.Name == "Execute") && m.IsGenericMethod);
     }
+
+    private static MethodInfo GenericCreateQueryMethod =>
+        _genericCreateQueryMethod ??= typeof(EntityQueryProvider)
+            .GetMethod("CreateQuery", 1, BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(Expression) }, null)!;
+
+    private MethodInfo GenericExecuteMethod =>
+        _genericExecuteMethod ??= _queryCompiler.GetType()
+            .GetMethod("Execute", 1, BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(Expression) }, null)!;
 
     /// <summary>
     ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
@@ -69,7 +71,7 @@ public class EntityQueryProvider : IAsyncQueryProvider
     ///     doing so can result in application failures when updating to a new Entity Framework Core release.
     /// </summary>
     public virtual object Execute(Expression expression)
-        => _genericExecuteMethod.MakeGenericMethod(expression.Type)
+        => GenericExecuteMethod.MakeGenericMethod(expression.Type)
             .Invoke(_queryCompiler, new object[] { expression })!;
 
     /// <summary>

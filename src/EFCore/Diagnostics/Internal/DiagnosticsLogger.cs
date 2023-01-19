@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 namespace Microsoft.EntityFrameworkCore.Diagnostics.Internal;
@@ -11,7 +12,8 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics.Internal;
 ///     any release. You should only use it directly in your code with extreme caution and knowing that
 ///     doing so can result in application failures when updating to a new Entity Framework Core release.
 /// </summary>
-public class DiagnosticsLogger<TLoggerCategory> : IDiagnosticsLogger<TLoggerCategory>
+// TODO: Remove DynamicallyAccessedMembers once dotnet/runtime/issues/80037 is fixed
+public class DiagnosticsLogger<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] TLoggerCategory> : IDiagnosticsLogger<TLoggerCategory>
     where TLoggerCategory : LoggerCategory<TLoggerCategory>, new()
 {
     /// <summary>
