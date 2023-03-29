@@ -15,8 +15,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal;
 public class QueryableMethodNormalizingExpressionVisitor : ExpressionVisitor
 {
     private readonly QueryCompilationContext _queryCompilationContext;
-    private readonly SelectManyVerifyingExpressionVisitor _selectManyVerifyingExpressionVisitor = new();
     private readonly GroupJoinConvertingExpressionVisitor _groupJoinConvertingExpressionVisitor = new();
+    private SelectManyVerifyingExpressionVisitor _selectManyVerifyingExpressionVisitor = null!;
 
     /// <summary>
     ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
@@ -37,6 +37,10 @@ public class QueryableMethodNormalizingExpressionVisitor : ExpressionVisitor
     /// </summary>
     public virtual Expression Normalize(Expression expression)
     {
+        var externalParametersDetector = new ExternalParametersDetector();
+        externalParametersDetector.Visit(expression);
+        _selectManyVerifyingExpressionVisitor = new(externalParametersDetector.ExternalParameters);
+
         var result = Visit(expression);
 
         return _groupJoinConvertingExpressionVisitor.Visit(result);
@@ -673,14 +677,46 @@ public class QueryableMethodNormalizingExpressionVisitor : ExpressionVisitor
         }
     }
 
+    private sealed class ExternalParametersDetector : ExpressionVisitor
+    {
+        private readonly List<ParameterExpression> _lambdaParameters = new();
+
+        public List<ParameterExpression> ExternalParameters { get; } = new();
+
+        protected override Expression VisitLambda<T>(Expression<T> lambdaExpression)
+        {
+            _lambdaParameters.AddRange(lambdaExpression.Parameters);
+
+            return base.VisitLambda(lambdaExpression);
+        }
+
+        protected override Expression VisitParameter(ParameterExpression parameterExpression)
+        {
+            if (!_lambdaParameters.Contains(parameterExpression))
+            {
+                if (!ExternalParameters.Contains(parameterExpression))
+                {
+                    ExternalParameters.Add(parameterExpression);
+                }
+            }
+
+            return base.VisitParameter(parameterExpression);
+        }
+    }
+
     private sealed class SelectManyVerifyingExpressionVisitor : ExpressionVisitor
     {
-        private readonly List<ParameterExpression> _allowedParameters = new();
+        private readonly List<ParameterExpression> _allowedParameters;
         private readonly ISet<string> _allowedMethods = new HashSet<string> { nameof(Queryable.Where), nameof(Queryable.AsQueryable) };
 
         private ParameterExpression? _rootParameter;
         private int _rootParameterCount;
         private bool _correlated;
+
+        public SelectManyVerifyingExpressionVisitor(IEnumerable<ParameterExpression> externalParameters)
+        {
+            _allowedParameters = new(externalParameters);
+        }
 
         public bool VerifyCollectionSelector(Expression body, ParameterExpression rootParameter)
         {
